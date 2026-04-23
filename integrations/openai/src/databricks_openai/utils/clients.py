@@ -13,6 +13,22 @@ from typing_extensions import override
 _APPS_ENDPOINT_PREFIX = "apps/"
 # Domain pattern indicating a Databricks App URL
 _DATABRICKS_APPS_DOMAIN = "databricksapps"
+# OpenAI client constructor args that DatabricksOpenAI / AsyncDatabricksOpenAI set
+# themselves to wire up Databricks-managed authentication. Callers may not override
+# these via kwargs -- they must use the dedicated parameters where applicable.
+_DATABRICKS_MANAGED_OPENAI_KWARGS = frozenset({"base_url", "api_key", "http_client"})
+
+
+def _check_openai_kwargs(openai_kwargs: dict) -> None:
+    """Raise TypeError if caller-supplied kwargs collide with Databricks-managed args."""
+    conflicts = _DATABRICKS_MANAGED_OPENAI_KWARGS.intersection(openai_kwargs)
+    if conflicts:
+        raise TypeError(
+            f"Cannot override Databricks-managed OpenAI client arguments: "
+            f"{sorted(conflicts)}. Use the dedicated parameters (e.g. base_url) "
+            f"or construct an openai.OpenAI / openai.AsyncOpenAI directly if you "
+            f"need full control."
+        )
 
 
 def _get_openai_api_key():
@@ -343,6 +359,10 @@ class DatabricksOpenAI(OpenAI):
             with ``base_url`` or ``use_ai_gateway``. Defaults to False.
         use_ai_gateway: If True, auto-detect AI Gateway V2 availability and route
             requests through it using the MLflow API. Defaults to False.
+        **openai_kwargs: Additional keyword arguments forwarded to ``openai.OpenAI`` /
+            ``openai.AsyncOpenAI``. Typically ``timeout`` or ``max_retries``. The
+            Databricks-managed args ``base_url``, ``api_key`` and ``http_client`` are
+            rejected -- use the dedicated parameters above instead.
 
     Example - Query a serving or AI gateway endpoint:
         >>> client = DatabricksOpenAI()
@@ -385,7 +405,9 @@ class DatabricksOpenAI(OpenAI):
         base_url: str | None = None,
         use_ai_gateway_native_api: bool = False,
         use_ai_gateway: bool = False,
+        **openai_kwargs: Any,
     ):
+        _check_openai_kwargs(openai_kwargs)
         if workspace_client is None:
             workspace_client = WorkspaceClient()
 
@@ -400,6 +422,7 @@ class DatabricksOpenAI(OpenAI):
             base_url=target_base_url,
             api_key=_get_openai_api_key(),
             http_client=_get_authorized_http_client(workspace_client),
+            **openai_kwargs,
         )
 
     @override
@@ -504,6 +527,10 @@ class AsyncDatabricksOpenAI(AsyncOpenAI):
             with ``base_url`` or ``use_ai_gateway``. Defaults to False.
         use_ai_gateway: If True, auto-detect AI Gateway V2 availability and route
             requests through it using the MLflow API. Defaults to False.
+        **openai_kwargs: Additional keyword arguments forwarded to ``openai.OpenAI`` /
+            ``openai.AsyncOpenAI``. Typically ``timeout`` or ``max_retries``. The
+            Databricks-managed args ``base_url``, ``api_key`` and ``http_client`` are
+            rejected -- use the dedicated parameters above instead.
 
     Example - Query a serving or AI gateway endpoint:
         >>> client = AsyncDatabricksOpenAI()
@@ -546,7 +573,9 @@ class AsyncDatabricksOpenAI(AsyncOpenAI):
         base_url: str | None = None,
         use_ai_gateway_native_api: bool = False,
         use_ai_gateway: bool = False,
+        **openai_kwargs: Any,
     ):
+        _check_openai_kwargs(openai_kwargs)
         if workspace_client is None:
             workspace_client = WorkspaceClient()
 
@@ -561,6 +590,7 @@ class AsyncDatabricksOpenAI(AsyncOpenAI):
             base_url=target_base_url,
             api_key=_get_openai_api_key(),
             http_client=_get_authorized_async_http_client(workspace_client),
+            **openai_kwargs,
         )
 
     @property

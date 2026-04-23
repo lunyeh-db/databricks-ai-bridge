@@ -168,6 +168,28 @@ class TestAsyncDatabricksOpenAI:
         mock_workspace_client.config.authenticate.assert_called()
 
 
+class TestOpenAIKwargForwarding:
+    """Caller-supplied openai kwargs reach openai.OpenAI / openai.AsyncOpenAI."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_ws(self):
+        with patch("databricks_openai.utils.clients.WorkspaceClient") as cls:
+            client = MagicMock(spec=WorkspaceClient)
+            client.config.host = "https://default.databricks.com"
+            client.config.authenticate.return_value = {"Authorization": "Bearer t"}
+            cls.return_value = client
+            yield
+
+    @pytest.mark.parametrize("cls", [DatabricksOpenAI, AsyncDatabricksOpenAI])
+    def test_forwards_max_retries(self, cls):
+        assert cls(max_retries=8).max_retries == 8
+
+    @pytest.mark.parametrize("cls", [DatabricksOpenAI, AsyncDatabricksOpenAI])
+    def test_rejects_databricks_managed_kwargs(self, cls):
+        with pytest.raises(TypeError, match="Databricks-managed"):
+            cls(api_key="x")
+
+
 class TestStrictFieldStripping:
     """Tests for strict field stripping helper functions."""
 
